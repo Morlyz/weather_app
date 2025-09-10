@@ -4,9 +4,11 @@ class Location extends StatelessWidget {
   const Location({
     super.key,
     required this.textEditingController,
+    required this.icon,
   });
 
   final TextEditingController textEditingController;
+  final Widget icon;
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +35,7 @@ class Location extends StatelessWidget {
               borderSide: BorderSide(
               width: 0,),
             ),
-            prefixIcon: InkWell(
-              onTap: (){},
-              child: Icon(Icons.search_outlined)),
+            prefixIcon: icon,
             hintText: 'Enter location...',
             
           ),

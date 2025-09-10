@@ -1,5 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:weather_app/__hourly_forecast_state.dart';
+import 'package:weather_app/additional_item.dart';
 import 'package:weather_app/location.dart';
+import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 void main() {
   runApp(const MyApp());
@@ -7,6 +12,7 @@ void main() {
 
 class MyApp extends StatelessWidget{
   const MyApp({super.key});
+
 
   @override build(BuildContext context){
     return HomeScreen();
@@ -22,24 +28,94 @@ class HomeScreen extends StatefulWidget{
 
 class _HomeScreenState extends State<HomeScreen> {
   TextEditingController textEditingController = TextEditingController();
+  double currentTemp = 0;
+  String currentCloud = '';
+
+  @override
+  void initState() {
+    super.initState();
+    getCurrentWeather();
+  }
+
+  Future<Map<String, dynamic>> getCurrentWeather() async{
+
+    try {
+      final String location = textEditingController.text == ''? 'london' : textEditingController.text;
+    
+
+    final res = await http.get(Uri.parse('https://api.openweathermap.org/data/2.5/forecast?q=$location&APPID=ffc76fc5e820807892b871398e239fdb'),
+    );
+
+    final data = jsonDecode(res.body);
+    if(data['cod'] != '200'){
+      throw 'An error occured!';
+    }
+
+    return data; 
+      
+    } catch (e) {
+      throw e.toString();
+    }
+     
+  }
 
   @override
   Widget build(BuildContext context) {
 
     return MaterialApp(
-      theme: ThemeData.light(useMaterial3: true),
+      theme: ThemeData.dark(useMaterial3: true),
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
           title: Text('Weather App', style: TextStyle(fontWeight: FontWeight.bold),),
           centerTitle: true,
+          actions: [
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                 
+                });
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16.0),
+                child: Icon(Icons.refresh_outlined),
+              ),
+              )
+          ],
         ),
-        body: Padding(
+        body: FutureBuilder(
+          future: getCurrentWeather(), 
+          builder: (context, snapshot) {
+
+            if(snapshot.connectionState == ConnectionState.waiting)
+            {return const Center(child: CircularProgressIndicator());}
+
+            if(snapshot.hasError){
+              return Center(
+                child : Text(snapshot.error.toString()),
+              );
+            }
+
+             final data = snapshot.data!;
+             final currentTemp = data['list'][0]['main']['temp'];
+             final currentCloud = data['list'][0]['weather'][0]['main'];
+             
+
+            return Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Location(textEditingController: textEditingController),
+              Location(
+                textEditingController: textEditingController,
+                icon: InkWell(
+              onTap: (){
+                setState(() {
+                  getCurrentWeather();
+                });
+              },
+              child: Icon(Icons.search_outlined)),
+                ),
               SizedBox(height: 50,),
               Center(
                 child: Card(
@@ -49,12 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.only(left: 80, right: 80, top: 40, bottom: 40,),
                     child: Column(
                       children: [
-                        Text('300k', style: TextStyle(
+                        Text('$currentTemp K', style: TextStyle(
                           fontSize: 25, 
                           fontWeight: FontWeight.bold,
                         ),),
-                        Icon(Icons.cloud, size: 70,),
-                        Text('Rain', style: TextStyle(
+                        Icon(currentCloud == 'Clouds' || currentCloud == 'Rain' ? Icons.cloud : Icons.wb_sunny_outlined, size: 70,),
+                        Text(currentCloud, style: TextStyle(
                           fontSize: 20,
                         ),)
                       ],                
@@ -74,7 +150,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: 5,
                   scrollDirection: Axis.horizontal,
                   itemBuilder: (context, index){
-                    return HourlyForecast();
+                    final sky = data['list'][index+1]['weather'][0]['main'].toString();
+                    final clock = DateTime.parse(data['list'][index+1]['dt_txt']);
+                    final temp = data['list'][index+1]['main']['temp'].toString();
+                
+                    return HourlyForecast(
+                      time: DateFormat.Hm().format(clock),
+                      icon: sky == 'Clouds' || sky == 'Rain'? Icons.cloud : Icons.wb_sunny_outlined,
+                      label: '$temp k',
+                    );
                   },
                 ),
               ),
@@ -87,66 +171,30 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Column(
-                    children: [
-                      Icon(Icons.water_drop_outlined, size: 30,),
-                      Text('Humidity', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),),
-                      Text('0.4', style: TextStyle(fontSize: 16,),)
-                    ],
+                  AdditionalItem(
+                    icon: Icons.water_drop_outlined,
+                    label: 'Humidity',
+                    value: '${data['list'][0]['main']['humidity'].toString()} %',
                   ),
-                   Column(
-                    children: [
-                      Icon(Icons.air_outlined, size: 30,),
-                      Text('Humidity', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),),
-                      Text('70Km/Hr', style: TextStyle(fontSize: 16,),)
-                    ],
-                  ),  Column(
-                    children: [
-                      Icon(Icons.stream_outlined, size: 30,),
-                      Text('Pressure', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),),
-                      Text('1006', style: TextStyle(fontSize: 16,),)
-                    ],
+                   AdditionalItem(
+                    icon: Icons.air_outlined,
+                    label: 'Wind Speed',
+                    value: '${data['list'][0]['wind']['speed'].toString()} km/hr',
+                  ),
+                   AdditionalItem(
+                    icon: Icons.stream_outlined,
+                    label: 'Pressure',
+                    value: data['list'][0]['main']['pressure'].toString(),
                   ),
                 ],
               )
             ],
           ),
-        ),
+        );
+          }
+          )
+        
       ),
     );
-  }
-}
-
-class HourlyForecast extends StatefulWidget {
-  const HourlyForecast({
-    super.key,
-  });
-
-  @override
-  State<HourlyForecast> createState() => _HourlyForecastState();
-}
-
-class _HourlyForecastState extends State<HourlyForecast> {
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-     elevation: 10,
-     clipBehavior: Clip.hardEdge,
-     child: Padding(
-       padding: const EdgeInsets.only(left: 25, right: 25, top: 10, bottom: 10,),
-       child: Column(
-         children: [
-           Text('00:00', style: TextStyle(
-             fontSize:20, 
-             fontWeight: FontWeight.bold,
-           ),),
-           Icon(Icons.cloud, size: 30,),
-           Text('307k', style: TextStyle(
-             fontSize: 16,
-           ),)
-         ],                
-       ),
-     ),
-                      );
   }
 }
